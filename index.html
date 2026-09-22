@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101c26">
+  <meta name="description" content="Play 27 ontological keys, combine six independent rhythms, and reason across imagined worlds in time.">
+  <title>Relacality · The relational piano</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#instrument">Skip to piano</a>
+  <div class="app-shell">
+    <header class="app-header">
+      <a class="brand" href="./" aria-label="Relacality home"><svg viewBox="0 0 36 36" aria-hidden="true"><path d="M6 27V12m8 15V7m8 20V15m8 12V9"/><circle cx="6" cy="10" r="2"/><circle cx="14" cy="5" r="2"/><circle cx="22" cy="13" r="2"/><circle cx="30" cy="7" r="2"/></svg><span>relacality<span class="brand-sub">DREAM UNITY</span></span></a>
+      <nav class="header-nav" aria-label="Page"><a href="#rhythm-mixer">Rhythm mixer</a><a href="#guide">How to play <span aria-hidden="true">↗</span></a></nav>
+    </header>
+
+    <main>
+      <div class="workspace-heading"><div><p class="eyebrow">THE RELATIONAL PIANO</p><h1>Give your ideas a rhythm.</h1></div><p class="heading-note">27 dedicated keys<span>Archetypal · Inner · Outer</span></p></div>
+
+      <nav class="mode-tabs" aria-label="Practice mode">
+        <button type="button" data-mode="free" class="mode-tab is-active" aria-pressed="true"><span class="mode-index">01</span> Free play</button>
+        <button type="button" data-mode="reason" class="mode-tab" aria-pressed="false"><span class="mode-index">02</span> Reason & play</button>
+        <button type="button" data-mode="match" class="mode-tab" aria-pressed="false"><span class="mode-index">03</span> World match</button>
+      </nav>
+
+      <section id="practice-panel" class="practice-panel" aria-label="Practice" hidden></section>
+
+      <section id="instrument" class="instrument" aria-labelledby="piano-title">
+        <div class="instrument-top"><div><p class="eyebrow">27 OPERATIONS / 27 KEYS</p><h2 id="piano-title">Your instrument</h2></div><div class="instrument-options"><label class="switch-label"><input id="piano-sound" type="checkbox" checked><span>Key sound</span></label><label class="volume-label" for="master-volume">Volume<input id="master-volume" type="range" min="0" max="100" value="65" aria-label="Master volume"></label><button id="release-notes" class="quiet-button" type="button" title="Release all held notes (Escape)">Release notes <kbd>Esc</kbd></button></div></div>
+        <div id="piano-keys" class="piano-keys"></div>
+        <div class="key-inspector"><div class="inspector-mark" aria-hidden="true">♪</div><div><strong id="active-key-name">Choose a key. Imagine an operation.</strong><p id="active-key-description">Use your keyboard or touch the keys. Each form has its own key and pitch. Hold to sustain; release to let go.</p></div><span id="audio-state" class="status-chip">Sound starts with your first key</span></div>
+      </section>
+
+      <section class="transport-bar" aria-label="Metronome transport"><div class="transport-buttons"><button id="transport-toggle" class="button primary" type="button"><span aria-hidden="true">▶</span> Start clocks</button><button id="transport-stop" class="button secondary" type="button" disabled>Stop</button></div><div class="transport-info"><span id="transport-status">Ready</span><output id="transport-time" aria-label="Elapsed clock time">00:00</output></div><div class="transport-options"><label for="cue-mode">Metronome cue<select id="cue-mode"><option value="continuous">Continuous</option><option value="fade">Four bars on · four bars silent</option><option value="silent">Visual only</option></select></label><span id="enabled-count" class="status-chip">1 / 6 clocks</span></div></section>
+
+      <section id="rhythm-mixer" class="mixer-section" aria-labelledby="mixer-title"><div class="section-heading"><div><p class="eyebrow">INDEPENDENT TEMPOS · SHARED START</p><h2 id="mixer-title">Rhythm mixer</h2><p>Switch on up to six clocks. Each has its own tempo, metre and sound.</p></div><div class="preset-control"><label for="rhythm-preset">Start with a pattern</label><select id="rhythm-preset"><option value="custom">Custom</option><option value="steady">Steady · 4 beats</option><option value="three-two">Three against two</option><option value="odd-even">Odd meets even · 5 / 4</option><option value="nested">Nested time · 1 : 2 : 4</option><option value="six">Six voices · 2 / 3 / 4 / 5 / 6 / 7</option></select></div></div><div id="clock-grid" class="clock-grid"></div><p class="mixer-caption">BPM counts individual beats. Beats per bar groups them. Tap a beat dot to cycle <strong>normal → accent → silent</strong>. Silent beats keep their place.</p></section>
+
+      <section class="reflection-grid" aria-label="Recording and world building"><div class="recording-panel panel"><div class="section-heading compact"><div><p class="eyebrow">CAPTURE A PHRASE</p><h2>Listen back</h2></div><span id="recording-status" class="status-chip">No recording yet</span></div><div class="recording-controls"><button id="record-button" type="button" class="button secondary">● Record keys</button><button id="replay-button" type="button" class="button secondary" disabled>▶ Replay</button><button id="export-button" type="button" class="quiet-button" disabled>Export phrase</button></div><div id="phrase-strip" class="phrase-strip" aria-label="Recorded notes"><p>Your notes appear here as you play.</p></div><p class="small-note">Records key presses and holds on this device. Maximum 3 minutes. Clocks stay separate from the recording.</p></div><div class="world-panel panel"><p class="eyebrow">DA VINCI · CROSS-DOMAIN IMAGINATION</p><h2>One structure. Another world.</h2><p id="world-prompt">Imagine a world where these operations belong together. What changes if one starts later, overlaps, or stops?</p><label for="world-notes">Your world and its counterpart</label><textarea id="world-notes" rows="3" placeholder="A receiving station… a living ecosystem… Which roles and timing relationships stay the same?"></textarea><p class="small-note" id="storage-status">Notes and settings save only in this browser.</p></div></section>
+
+      <section id="guide" class="guide-section" aria-labelledby="guide-title"><div class="section-heading"><div><p class="eyebrow">BEGIN HERE</p><h2 id="guide-title">How to play</h2></div></div><div class="guide-grid"><article><span class="guide-number">1</span><h3>Play a meaning</h3><p>The top nine keys are archetypal. The middle nine are inner. The bottom nine are outer. Every key is a different form. Touch a key or press the letter shown on it.</p><p>For example, Outer Projection can be a source sending something out. Inner Projection can be a receiver taking something in. Build those roles into your imagined world.</p></article><article><span class="guide-number">2</span><h3>Choose your time</h3><p>Try one clock first. BPM means beats per minute; each clock accepts 1–240. Beats per bar accepts 1–16, including odd numbers. A 3-beat bar counts 1–2–3; a 4-beat bar counts 1–2–3–4.</p><p>Switch all clocks off for free timing. Use visual-only cues or alternating silent bars to practise maintaining the pulse yourself.</p></article><article><span class="guide-number">3</span><h3>Reason, then perform</h3><p>In Reason & play, read the clues and answer the missing-time question. Then try playing the score. A four-beat count-in prepares you. Beat 0 is the first beat after the count-in.</p><p>Play the named keys at their marked times. Hold a key for the marked length when a duration is required. Timing and note accuracy are reported separately.</p></article><article><span class="guide-number">4</span><h3>Carry the world across</h3><p>In World match, compare two complete worlds. Renamed entities and a uniformly faster or slower performance may match. The category, perspective, entity attachments, order and relative durations must all correspond.</p><p>Imagine the same system in a distant domain. Name what each part does and predict what happens if a timing relationship changes. A sequence alone does not establish cause and effect.</p></article></div><details class="technical-guide"><summary>Keyboard map, audio and timing</summary><p>Archetypal: Q W E R T Y U I O. Inner: A S D F G H J K L. Outer: Z X C V B N M , . These are physical key positions; on-screen pads also work. Keyboard playing pauses while you type in a field. Escape releases notes and cancels a performance or replay.</p><p>Audio uses a synthesised piano tone and six distinct metronome sounds. Wired audio or built-in speakers usually give more immediate feedback than Bluetooth. Timing results describe your input on this device; they are practice feedback, not a laboratory measure. Switching away from the page pauses the clocks and cancels an active performance so hidden time is not scored.</p><p>This is an experimental relational reasoning exercise. The ontology provides a vocabulary for constructing worlds; scores measure the displayed task, not intelligence.</p></details></section>
+    </main>
+    <footer><span>relacality <span class="footer-dot">·</span> Dream Unity</span><span>Play · Construct · Transfer</span><a href="https://github.com/dream-unity/relacality" target="_blank" rel="noopener noreferrer">Source ↗</a></footer>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
