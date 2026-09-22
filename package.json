@@ -6,6 +6,7 @@
   "description": "A 27-key ontological piano and temporal relational reasoning instrument.",
   "scripts": {
     "start": "python3 -m http.server 4173 --bind 0.0.0.0",
+    "build:standalone": "node scripts/build-standalone.mjs",
     "test": "node --test tests/*.test.mjs"
   },
   "engines": { "node": ">=22" }

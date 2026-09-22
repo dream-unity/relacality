@@ -14,3 +14,5 @@ jobs:
           node-version: '22'
       - run: npm test
       - run: node --check app.js
+      - run: npm run build:standalone
+      - run: git diff --exit-code -- offline/relacality.html

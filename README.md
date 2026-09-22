@@ -8,6 +8,8 @@ Open the deployed site in a current browser. A key press or a transport button e
 
 For local development, run `npm start` (Node and Python 3 installed) and open `http://localhost:4173`. This is a static ES-module application; serve it over HTTP rather than opening `index.html` as a local file.
 
+For a single-file offline version, download [`offline/relacality.html`](offline/relacality.html) and open it directly in a current browser; no server, installation or internet connection is needed to play. You can move or rename that HTML file. It contains the complete interface, styles, ontology and audio/game engines. Browser storage for local files varies by browser, so export recordings you want to keep. To rebuild after changing the source files, run `npm run build:standalone` with Node 22 or newer.
+
 ## The 27 keys
 
 | Category | Archetypal | Inner | Outer |
