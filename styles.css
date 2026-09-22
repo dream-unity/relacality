@@ -81,6 +81,31 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(29px, 3.3v
 .quiet-button:hover:not(:disabled) { color: var(--accent); }
 .quiet-button kbd { padding: 3px 5px; border: 1px solid #50626b; border-radius: 4px; font-size: 12px; margin-left: 6px; color: #d3dfdf; }
 .piano-keys { display: grid; gap: 11px; }
+.chord-panel { margin: 0 0 20px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: #0b1b2440; }
+.chord-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 14px; font-weight: 650; }
+.chord-heading output { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 400; }
+.chord-buttons { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
+.chord-button { --chord-color: var(--accent); display: flex; align-items: center; gap: 10px; min-width: 0; padding: 11px; border: 1px solid var(--line); border-bottom: 3px solid var(--chord-color); border-radius: 6px; background: var(--surface); color: var(--text); text-align: left; font: inherit; font-size: 14px; cursor: pointer; user-select: none; touch-action: none; }
+.chord-button[data-chord="inner"] { --chord-color: var(--inner); }
+.chord-button[data-chord="outer"] { --chord-color: var(--outer); }
+.chord-button[data-chord="all"] { --chord-color: #e5d475; }
+.chord-button kbd { color: var(--chord-color); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
+.chord-button span { min-width: 0; font-weight: 650; }
+.chord-button small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.chord-button[aria-pressed="true"] { background: var(--chord-color); color: #102127; border-color: var(--chord-color); }
+.chord-button[aria-pressed="true"] :is(kbd,small) { color: #253a40; }
+.chord-help { margin: 9px 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.latch-controls { display: flex; align-items: center; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.latch-controls button { flex-shrink: 0; font-size: 14px; }
+.latch-controls span { color: var(--muted); font-size: 14px; line-height: 1.5; }
+#latch-keys[aria-pressed="true"] { background: var(--accent); color: #14252b; border-color: var(--accent); }
+.piano-key.is-latched::after { content: ""; position: absolute; top: 12px; right: 9px; width: 7px; height: 7px; border: 2px solid currentColor; border-radius: 50%; }
+@media (max-width: 650px) {
+  .chord-panel { padding: 11px; }
+  .chord-buttons { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .chord-button { padding: 10px; gap: 8px; }
+  .latch-controls { flex-direction: column; align-items: stretch; gap: 8px; }
+}
 .key-row { --form-color: var(--accent); display: grid; grid-template-columns: 106px minmax(0, 1fr); gap: 14px; align-items: stretch; }
 .key-row[data-form="inner"] { --form-color: var(--inner); }
 .key-row[data-form="outer"] { --form-color: var(--outer); }

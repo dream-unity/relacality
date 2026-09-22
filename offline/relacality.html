@@ -91,6 +91,31 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(29px, 3.3v
 .quiet-button:hover:not(:disabled) { color: var(--accent); }
 .quiet-button kbd { padding: 3px 5px; border: 1px solid #50626b; border-radius: 4px; font-size: 12px; margin-left: 6px; color: #d3dfdf; }
 .piano-keys { display: grid; gap: 11px; }
+.chord-panel { margin: 0 0 20px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: #0b1b2440; }
+.chord-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 14px; font-weight: 650; }
+.chord-heading output { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 400; }
+.chord-buttons { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
+.chord-button { --chord-color: var(--accent); display: flex; align-items: center; gap: 10px; min-width: 0; padding: 11px; border: 1px solid var(--line); border-bottom: 3px solid var(--chord-color); border-radius: 6px; background: var(--surface); color: var(--text); text-align: left; font: inherit; font-size: 14px; cursor: pointer; user-select: none; touch-action: none; }
+.chord-button[data-chord="inner"] { --chord-color: var(--inner); }
+.chord-button[data-chord="outer"] { --chord-color: var(--outer); }
+.chord-button[data-chord="all"] { --chord-color: #e5d475; }
+.chord-button kbd { color: var(--chord-color); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
+.chord-button span { min-width: 0; font-weight: 650; }
+.chord-button small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.chord-button[aria-pressed="true"] { background: var(--chord-color); color: #102127; border-color: var(--chord-color); }
+.chord-button[aria-pressed="true"] :is(kbd,small) { color: #253a40; }
+.chord-help { margin: 9px 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.latch-controls { display: flex; align-items: center; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.latch-controls button { flex-shrink: 0; font-size: 14px; }
+.latch-controls span { color: var(--muted); font-size: 14px; line-height: 1.5; }
+#latch-keys[aria-pressed="true"] { background: var(--accent); color: #14252b; border-color: var(--accent); }
+.piano-key.is-latched::after { content: ""; position: absolute; top: 12px; right: 9px; width: 7px; height: 7px; border: 2px solid currentColor; border-radius: 50%; }
+@media (max-width: 650px) {
+  .chord-panel { padding: 11px; }
+  .chord-buttons { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .chord-button { padding: 10px; gap: 8px; }
+  .latch-controls { flex-direction: column; align-items: stretch; gap: 8px; }
+}
 .key-row { --form-color: var(--accent); display: grid; grid-template-columns: 106px minmax(0, 1fr); gap: 14px; align-items: stretch; }
 .key-row[data-form="inner"] { --form-color: var(--inner); }
 .key-row[data-form="outer"] { --form-color: var(--outer); }
@@ -440,6 +465,17 @@ footer a { text-decoration: none; }
 
       <section id="instrument" class="instrument" aria-labelledby="piano-title">
         <div class="instrument-top"><div><p class="eyebrow">27 OPERATIONS / 27 KEYS</p><h2 id="piano-title">Your instrument</h2></div><div class="instrument-options"><label class="switch-label"><input id="piano-sound" type="checkbox" checked><span>Key sound</span></label><label class="volume-label" for="master-volume">Volume<input id="master-volume" type="range" min="0" max="100" value="65" aria-label="Master volume"></label><button id="release-notes" class="quiet-button" type="button" title="Release all held notes (Escape)">Release notes <kbd>Esc</kbd></button></div></div>
+        <div class="chord-panel" aria-label="Full-row and all-note chords">
+          <div class="chord-heading"><span>Hold a whole row</span><output id="held-count" aria-label="Held notes">0 / 27 held</output></div>
+          <div class="chord-buttons">
+            <button type="button" class="chord-button" data-chord="archetypal" aria-pressed="false" aria-keyshortcuts="1"><kbd>1</kbd><span>Archetypal <small>Q–O · 9 notes</small></span></button>
+            <button type="button" class="chord-button" data-chord="inner" aria-pressed="false" aria-keyshortcuts="2"><kbd>2</kbd><span>Inner <small>A–L · 9 notes</small></span></button>
+            <button type="button" class="chord-button" data-chord="outer" aria-pressed="false" aria-keyshortcuts="3"><kbd>3</kbd><span>Outer <small>Z–. · 9 notes</small></span></button>
+            <button type="button" class="chord-button" data-chord="all" aria-pressed="false" aria-keyshortcuts="4"><kbd>4</kbd><span>All 27 <small>Every category</small></span></button>
+          </div>
+          <p class="chord-help">Hold a button or its number key to play the chord; release to stop. These shortcuts work even when your keyboard cannot report many keys together.</p>
+          <div class="latch-controls"><button type="button" id="latch-keys" class="button secondary" aria-pressed="false" aria-describedby="latch-help">Latch individual keys</button><span id="latch-help">Latch lets you build a chord one key at a time. Escape releases every note.</span></div>
+        </div>
         <div id="piano-keys" class="piano-keys"></div>
         <div class="key-inspector"><div class="inspector-mark" aria-hidden="true">♪</div><div><strong id="active-key-name">Choose a key. Imagine an operation.</strong><p id="active-key-description">Use your keyboard or touch the keys. Each form has its own key and pitch. Hold to sustain; release to let go.</p></div><span id="audio-state" class="status-chip">Sound starts with your first key</span></div>
         <p class="small-note" title="The browser's estimate may omit keyboard, Bluetooth or other device delay. Visual pulses follow estimated audible time; this cannot remove hardware delay."><span id="audio-latency">Output delay appears after sound starts.</span> For tighter timing, use built-in speakers or wired headphones.</p>
@@ -904,43 +940,81 @@ class AudioEngine {
   }
 
   noteOn(id, midi, velocity = 0.75) {
-    return this._playNote(id, midi, this._context?.currentTime, MAX_NOTE_SECONDS, velocity);
+    return this._playNote(id, midi, this._context?.currentTime, MAX_NOTE_SECONDS, velocity, true);
+  }
+
+  /** Prepare the full chord before reading its common onset. No timer or
+   * artificial scheduling delay is introduced into live key input. */
+  noteOnBatch(notes) {
+    if (!this._canPlay() || !Array.isArray(notes)) return 0;
+    const unique = new Map();
+    for (const note of notes) {
+      if (note && note.id !== undefined && finite(note.velocity, 0.75) > 0) unique.set(note.id, note);
+    }
+    // The instrument has 27 keys; bound the API too so malformed input cannot
+    // allocate an unlimited number of oscillator graphs in one gesture.
+    const entries = [...unique.values()].slice(0, 32);
+    for (const { id } of entries) this.noteOff(id);
+    const prepared = entries.map(({ id, midi, velocity = 0.75 }) => this._prepareNote(id, midi, velocity, true));
+    const time = this._context.currentTime;
+    for (const note of prepared) {
+      this._reserveVoice(time, true);
+      this._startNote(note, time, MAX_NOTE_SECONDS);
+    }
+    return prepared.length;
   }
 
   scheduleNote(id, midi, startAudioTime, durationSeconds, velocity = 0.75) {
     if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return false;
-    return this._playNote(id, midi, startAudioTime, durationSeconds, velocity);
+    return this._playNote(id, midi, startAudioTime, durationSeconds, velocity, false);
   }
 
-  _playNote(id, midi, startAudioTime, durationSeconds, velocity) {
-    if (!this._context || this._context.state !== 'running' || !this._pianoEnabled) return false;
-    if (finite(velocity, 0.75) <= 0) return false;
+  _canPlay() {
+    return this._context && this._context.state === 'running' && this._pianoEnabled;
+  }
+
+  _dropVoice(note) {
+    this._releaseNote(note, true);
+    note.envelope.disconnect();
+    this._voices.delete(note);
+  }
+
+  _reserveVoice(time, live) {
+    const now = this._context.currentTime;
+    // Finished voices can await their asynchronous onended callback. Reclaim
+    // them first, without counting them against currently held notes.
+    for (const note of this._voices) if (note.end <= now) this._dropVoice(note);
+    const overlapping = [...this._voices].filter(note => note.start <= time && note.end > time);
+    const candidates = overlapping.length >= 32 ? overlapping
+      : this._voices.size >= 256 ? [...this._voices] : [];
+    if (!candidates.length) return true;
+    // A released tail may be older OR newer than a held note. Prefer the tail
+    // explicitly, then playback voices, before considering a held live key.
+    const evict = candidates.find(note => note.released)
+      ?? candidates.find(note => !note.live)
+      ?? (live ? candidates[0] : null);
+    if (!evict) return false;
+    this._dropVoice(evict);
+    return true;
+  }
+
+  _playNote(id, midi, startAudioTime, durationSeconds, velocity, live = false) {
+    if (!this._canPlay() || finite(velocity, 0.75) <= 0) return false;
     if (this._notes.has(id)) this.noteOff(id);
     const ctx = this._context;
     const time = Math.max(ctx.currentTime, finite(startAudioTime, ctx.currentTime));
-    const duration = clamp(finite(durationSeconds, MAX_NOTE_SECONDS), 0.025, MAX_NOTE_SECONDS);
-    const end = time + duration + 0.13;
-    // Future phrase notes do not consume simultaneous polyphony. Both the
-    // pending queue and overlapping voices are bounded, including key repeats.
-    const overlapping = [...this._voices].filter(note => note.start <= time && note.end > time);
-    const evict = overlapping.length >= 32 ? overlapping[0]
-      : this._voices.size >= 256 ? this._voices.values().next().value : null;
-    if (evict) {
-      this._releaseNote(evict, true);
-      evict.envelope.disconnect();
-      this._voices.delete(evict);
-    }
+    if (!this._reserveVoice(time, live)) return false;
+    const note = this._prepareNote(id, midi, velocity, live);
+    this._startNote(note, time, durationSeconds);
+    return true;
+  }
+
+  _prepareNote(id, midi, velocity, live) {
+    const ctx = this._context;
     const frequency = 440 * 2 ** ((clamp(finite(midi, 60), 21, 108) - 69) / 12);
     const level = clamp(finite(velocity, 0.75), 0, 1) * 0.26;
     const envelope = ctx.createGain();
     envelope.gain.value = 0;
-    envelope.gain.setValueAtTime(0, time);
-    envelope.gain.linearRampToValueAtTime(level, time + PIANO_ATTACK_SECONDS);
-    for (const point of [0.3, 2.8, 8]) {
-      if (point < duration) envelope.gain.exponentialRampToValueAtTime(pianoLevel(level, point), time + point);
-    }
-    envelope.gain.exponentialRampToValueAtTime(pianoLevel(level, duration), time + duration);
-    envelope.gain.linearRampToValueAtTime(0, time + duration + 0.12);
     envelope.connect(this._master);
     const sources = [];
     const partials = [];
@@ -949,18 +1023,13 @@ class AudioEngine {
       const partial = ctx.createGain();
       source.type = type;
       source.frequency.value = frequency * ratio;
-      partial.gain.setValueAtTime(weight, time);
-      if (ratio > 1) partial.gain.exponentialRampToValueAtTime(0.005, time + 1.2 / Math.sqrt(ratio));
+      partial.gain.value = weight;
       source.connect(partial);
       partial.connect(envelope);
-      source.start(time);
-      source.stop(end);
       sources.push(source);
       partials.push(partial);
     });
-    const note = { id, sources, partials, envelope, start: time, end, duration, level, released: false };
-    this._notes.set(id, note);
-    this._voices.add(note);
+    const note = { id, sources, partials, envelope, level, live, released: false };
     sources[0].onended = () => {
       this._voices.delete(note);
       if (this._notes.get(id) === note) this._notes.delete(id);
@@ -968,7 +1037,30 @@ class AudioEngine {
       partials.forEach(partial => partial.disconnect());
       envelope.disconnect();
     };
-    return true;
+    return note;
+  }
+
+  _startNote(note, time, durationSeconds) {
+    const duration = clamp(finite(durationSeconds, MAX_NOTE_SECONDS), 0.025, MAX_NOTE_SECONDS);
+    const end = time + duration + 0.13;
+    const { envelope, level, sources, partials } = note;
+    Object.assign(note, { start: time, end, duration });
+    envelope.gain.setValueAtTime(0, time);
+    envelope.gain.linearRampToValueAtTime(level, time + PIANO_ATTACK_SECONDS);
+    for (const point of [0.3, 2.8, 8]) {
+      if (point < duration) envelope.gain.exponentialRampToValueAtTime(pianoLevel(level, point), time + point);
+    }
+    envelope.gain.exponentialRampToValueAtTime(pianoLevel(level, duration), time + duration);
+    envelope.gain.linearRampToValueAtTime(0, time + duration + 0.12);
+    [1, 2, 3.002, 4.006].forEach((ratio, index) => {
+      const partial = partials[index];
+      partial.gain.setValueAtTime(partial.gain.value, time);
+      if (ratio > 1) partial.gain.exponentialRampToValueAtTime(0.005, time + 1.2 / Math.sqrt(ratio));
+      sources[index].start(time);
+      sources[index].stop(end);
+    });
+    this._notes.set(note.id, note);
+    this._voices.add(note);
   }
 
   _releaseNote(note, immediate = false) {
@@ -1288,7 +1380,13 @@ let lastClockSettings = '';
 let lastCueMode = '';
 let lastPianoEnabled = null;
 const held = new Map();
+const inputGroups = new Map();
 const pointerNotes = new Map();
+const keyboardActivations = new Set();
+const chordKeys = new Map([...FORMS.map(form => [form.id, KEYS.filter(key => key.form===form.id)]), ['all', KEYS]]);
+const chordShortcuts = new Map(['archetypal','inner','outer','all'].flatMap((id,index)=>[[`Digit${index+1}`,id],[`Numpad${index+1}`,id]]));
+let latchKeys = false;
+let activationSequence = 0;
 const lastBeat = new Map();
 const answered = { correct: 0, total: 0 };
 
@@ -1334,36 +1432,80 @@ function renderKeys() {
 }
 function noteName(midi) { const pitches=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B']; return pitches[midi%12]+(Math.floor(midi/12)-1); }
 function inspectKey(key) { $('#active-key-name').textContent = key.name; $('#active-key-description').textContent = key.description; }
-function paintHeld(keyId, state) { const button=$(`[data-key-id="${keyId}"]`); if(button) { button.classList.toggle('is-held',state); button.setAttribute('aria-pressed',String(state)); } }
-function isTyping(target) { return target instanceof Element && (target.matches('input, textarea, select') || target.isContentEditable); }
-function pressKey(key, source) {
-  if (held.has(source)) return;
+function paintHeld(keyId, state) { const button=$(`[data-key-id="${keyId}"]`); if(button) { button.classList.toggle('is-held',state); button.classList.toggle('is-latched',Boolean(held.get(keyId)?.owners.has(`latch-${keyId}`))); button.setAttribute('aria-pressed',String(state)); } }
+function paintInputControls() {
+  $('#held-count').textContent=`${held.size} / 27 held`;
+  $$('[data-chord]').forEach(button=>button.setAttribute('aria-pressed',String(chordKeys.get(button.dataset.chord).every(key=>held.has(key.id)))));
+}
+function isTyping(target) {
+  return target instanceof Element && (target.matches('textarea, select') || target.isContentEditable ||
+    (target instanceof HTMLInputElement && !['checkbox','radio','range','button','submit','reset'].includes(target.type)));
+}
+function pressKeys(keys, source) {
+  if (inputGroups.has(source)) return;
   const token = generation;
-  const entry = { key, began: performance.now(), noteId:`input-${source}`, record:null, performance:null, cancelled:false };
-  held.set(source,entry);
-  // A running instrument must respond in this input event, before DOM updates
-  // or a Promise continuation. Only a cold/suspended context needs unlocking.
-  if (engine.context?.state === 'running') engine.noteOn(entry.noteId,key.midi,.75);
-  else void readyAudio().then(ready => {
-    if (ready && token===generation && !entry.cancelled && held.get(source)===entry) engine.noteOn(entry.noteId,key.midi,.75);
-  });
-  if (practice && practice.type === 'perform') {
-    const onset=(engine.presentationElapsed-practice.startElapsed)/practice.beatSeconds;
-    if (onset >= -.45 && onset <= challenge.lengthBeats+.5) { entry.performance={keyId:key.id,onset,duration:0}; practice.events.push(entry.performance); }
+  const began = performance.now();
+  const onset = practice?.type==='perform' ? (engine.presentationElapsed-practice.startElapsed)/practice.beatSeconds : null;
+  const fresh = [];
+  inputGroups.set(source,new Set(keys.map(key=>key.id)));
+  for(const key of keys) {
+    let entry=held.get(key.id);
+    if(entry)entry.owners.add(source);
+    else {
+      entry={key,began,noteId:`input-${key.id}`,owners:new Set([source]),record:null,performance:null,cancelled:false};
+      held.set(key.id,entry);fresh.push(entry);
+    }
   }
-  paintHeld(key.id,true); inspectKey(key);
-  if (recordStart !== null) { entry.record={keyId:key.id,onset:(entry.began-recordStart)/1000,duration:.15}; recording.push(entry.record); renderPhrase(); }
+  const sound = entries => {
+    if(entries.length===1)engine.noteOn(entries[0].noteId,entries[0].key.midi,.75);
+    else if(entries.length)engine.noteOnBatch(entries.map(entry=>({id:entry.noteId,midi:entry.key.midi,velocity:.75})));
+  };
+  // Each pitch has one voice, even when both a row and an individual key own
+  // it. A chord starts as one audio batch before any display work.
+  if(engine.context?.state==='running')sound(fresh);
+  else void readyAudio().then(ready => {
+    if(ready && token===generation)sound(fresh.filter(entry=>!entry.cancelled && held.get(entry.key.id)===entry));
+  });
+  for(const entry of fresh) {
+    if(onset!==null && onset>=-.45 && onset<=challenge.lengthBeats+.5) {
+      entry.performance={keyId:entry.key.id,onset,duration:0};practice.events.push(entry.performance);
+    }
+    if(recordStart!==null) {
+      entry.record={keyId:entry.key.id,onset:(began-recordStart)/1000,duration:.15};recording.push(entry.record);
+    }
+  }
+  keys.forEach(key=>paintHeld(key.id,true));paintInputControls();
+  if(keys.length===1)inspectKey(keys[0]);
+  else {$('#active-key-name').textContent=keys.length===27?'All 27 categories':`${keys[0].formLabel} row · 9 categories`;$('#active-key-description').textContent='New notes in this chord start together. Release the shortcut or button to let go.';}
+  if(recordStart!==null && fresh.length)renderPhrase();
 }
-function releaseKey(source) {
-  const entry=held.get(source); if(!entry)return;
-  entry.cancelled=true;
-  const duration=Math.max(.015,(performance.now()-entry.began)/1000);
-  if(entry.record)entry.record.duration=duration;
-  if(entry.performance && practice)entry.performance.duration=duration/practice.beatSeconds;
-  engine.noteOff(entry.noteId); held.delete(source);
-  if(![...held.values()].some(other=>other.key.id===entry.key.id))paintHeld(entry.key.id,false);
+function releaseGroup(source, releasedAt=performance.now()) {
+  const keys=inputGroups.get(source);if(!keys)return;
+  inputGroups.delete(source);
+  for(const keyId of keys) {
+    const entry=held.get(keyId);if(!entry)continue;
+    entry.owners.delete(source);
+    if(entry.owners.size===0) {
+      entry.cancelled=true;
+      const duration=Math.max(.015,(releasedAt-entry.began)/1000);
+      if(entry.record)entry.record.duration=duration;
+      if(entry.performance && practice)entry.performance.duration=duration/practice.beatSeconds;
+      engine.noteOff(entry.noteId);held.delete(keyId);
+    }
+    paintHeld(keyId,held.has(keyId));
+  }
+  paintInputControls();
 }
-function releaseInputs() { [...held.keys()].forEach(releaseKey); pointerNotes.clear(); }
+function triggerKey(key,source) {
+  if(!latchKeys){pressKeys([key],source);return;}
+  const latchSource=`latch-${key.id}`;
+  if(inputGroups.has(latchSource))releaseGroup(latchSource);else pressKeys([key],latchSource);
+}
+function triggerPlayButton(button,source) {
+  if(button.dataset.chord)pressKeys(chordKeys.get(button.dataset.chord),source);
+  else triggerKey(keyById.get(button.dataset.keyId),source);
+}
+function releaseInputs() { const time=performance.now();[...inputGroups.keys()].forEach(source=>releaseGroup(source,time));pointerNotes.clear();keyboardActivations.clear(); }
 function allQuiet(message=false) {
   generation++; releaseInputs(); engine.releaseAll();
   if(playback) { playback=null; $('#replay-button').textContent='▶ Replay'; }
@@ -1374,24 +1516,38 @@ function allQuiet(message=false) {
 document.addEventListener('keydown',event=>{
   if(event.code==='Escape') { allQuiet(true); return; }
   if(event.repeat || event.ctrlKey || event.altKey || event.metaKey || isTyping(event.target))return;
+  const chord=chordShortcuts.get(event.code);
+  if(chord){event.preventDefault();pressKeys(chordKeys.get(chord),`keyboard-${event.code}`);return;}
+  if(event.code==='Enter' || event.code==='Space') {
+    const button=event.target.closest?.('[data-key-id], [data-chord]');
+    if(button){event.preventDefault();keyboardActivations.add(event.code);triggerPlayButton(button,`activation-${event.code}`);return;}
+  }
   const key=keyByCode.get(event.code); if(!key)return;
-  event.preventDefault(); pressKey(key,`keyboard-${event.code}`);
+  event.preventDefault();triggerKey(key,`keyboard-${event.code}`);
 });
-document.addEventListener('keyup',event=>{if(keyByCode.has(event.code))releaseKey(`keyboard-${event.code}`);});
-$('#piano-keys').addEventListener('pointerdown',event=>{
-  const button=event.target.closest('[data-key-id]'); if(!button || event.button>0)return;
+document.addEventListener('keyup',event=>{
+  releaseGroup(`keyboard-${event.code}`);
+  if(keyboardActivations.has(event.code)){event.preventDefault();keyboardActivations.delete(event.code);releaseGroup(`activation-${event.code}`);}
+});
+$('#instrument').addEventListener('pointerdown',event=>{
+  const button=event.target.closest('[data-key-id], [data-chord]'); if(!button || event.button>0)return;
   event.preventDefault(); button.focus({preventScroll:true});
   const source=`pointer-${event.pointerId}`; pointerNotes.set(event.pointerId,source);
-  button.setPointerCapture?.(event.pointerId); pressKey(keyById.get(button.dataset.keyId),source);
+  button.setPointerCapture?.(event.pointerId);triggerPlayButton(button,source);
 });
-for(const name of ['pointerup','pointercancel','lostpointercapture'])document.addEventListener(name,event=>{const source=pointerNotes.get(event.pointerId);if(source){releaseKey(source);pointerNotes.delete(event.pointerId);}});
-$('#piano-keys').addEventListener('click',event=>{
+for(const name of ['pointerup','pointercancel','lostpointercapture'])document.addEventListener(name,event=>{const source=pointerNotes.get(event.pointerId);if(source){releaseGroup(source);pointerNotes.delete(event.pointerId);}});
+$('#instrument').addEventListener('click',event=>{
   if(event.detail!==0)return; // Keyboard/screen-reader activation of a focused pad.
-  const button=event.target.closest('[data-key-id]');if(!button)return;
-  const source=`accessible-${button.dataset.keyId}`;pressKey(keyById.get(button.dataset.keyId),source);setTimeout(()=>releaseKey(source),350);
+  const button=event.target.closest('[data-key-id], [data-chord]');if(!button || keyboardActivations.size)return;
+  const source=`accessible-${++activationSequence}`;triggerPlayButton(button,source);setTimeout(()=>releaseGroup(source),350);
 });
 $('#piano-keys').addEventListener('focusin',event=>{const button=event.target.closest('[data-key-id]');if(button)inspectKey(keyById.get(button.dataset.keyId));});
 $('#release-notes').addEventListener('click',()=>allQuiet(true));
+$('#latch-keys').addEventListener('click',()=>{
+  latchKeys=!latchKeys;$('#latch-keys').setAttribute('aria-pressed',String(latchKeys));
+  $('#latch-help').textContent=latchKeys?'Tap individual notes to hold them; tap again to release. Row buttons and 1–4 still play only while held.':'Latch lets you build a chord one key at a time. Escape releases every note.';
+  if(!latchKeys){const time=performance.now();[...inputGroups.keys()].filter(source=>source.startsWith('latch-')).forEach(source=>releaseGroup(source,time));}
+});
 
 function renderClocks() {
   $('#clock-grid').innerHTML=clocks.map((clock,index)=>`<article class="clock-card ${clock.enabled?'is-enabled':''}" data-index="${index}" style="--clock-color:${colours[index]}"><div class="clock-header"><label class="clock-enable"><input type="checkbox" data-setting="enabled" ${clock.enabled?'checked':''} aria-label="Enable clock ${index+1}"><span>Clock ${String(index+1).padStart(2,'0')}</span></label><span class="clock-state">${clock.enabled?'Ready':'Off'}</span></div><div class="clock-fields"><label class="bpm-field">BPM<input type="number" data-setting="bpm" min="1" max="240" step="1" value="${clock.bpm}" aria-label="Clock ${index+1} BPM"></label><label class="beats-field">Beats / bar<input type="number" data-setting="beats" min="1" max="16" step="1" value="${clock.beats}" aria-label="Clock ${index+1} beats per bar"></label><label class="voice-field">Sound<select data-setting="voice" aria-label="Clock ${index+1} sound">${voiceOptions.map(([id,label])=>`<option value="${id}" ${clock.voice===id?'selected':''}>${label}</option>`).join('')}</select></label><label class="phase-field">Start offset <span>(beats)</span><input data-setting="phase" type="number" min="0" max="16" step="0.25" value="${clock.phase}" aria-label="Clock ${index+1} start offset"></label></div><div class="beat-pattern" aria-label="Clock ${index+1} beat pattern">${clock.pattern.map((value,beat)=>`<button type="button" class="beat-dot" data-beat="${beat}" data-value="${value}" title="Beat ${beat+1}: ${['silent','normal','accent'][value]}. Press to change." aria-label="Clock ${index+1}, beat ${beat+1}: ${['silent','normal','accent'][value]}">${beat+1}</button>`).join('')}</div><label class="clock-volume">Volume<input type="range" data-setting="volume" min="0" max="100" value="${Math.round(clock.volume*100)}" aria-label="Clock ${index+1} volume"></label><div class="clock-progress" aria-hidden="true"><span></span></div></article>`).join('');
@@ -1589,7 +1745,7 @@ function frame() {
     schedulePlayback();
     const t=(engine.presentationTime-playback.start)/(60/playback.bpm);
     const sounding=new Set(playback.events.filter(event=>t>=event.onset&&t<event.onset+event.duration).map(event=>event.keyId));
-    KEYS.forEach(key=>paintHeld(key.id,sounding.has(key.id)||[...held.values()].some(entry=>entry.key.id===key.id)));
+    KEYS.forEach(key=>paintHeld(key.id,sounding.has(key.id)||held.has(key.id)));
     if(engine.presentationTime>playback.end+.15){playback=null;$('#replay-button').textContent='▶ Replay';}
   }
   requestAnimationFrame(frame);

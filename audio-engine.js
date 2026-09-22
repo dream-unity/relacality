@@ -364,43 +364,81 @@ export class AudioEngine {
   }
 
   noteOn(id, midi, velocity = 0.75) {
-    return this._playNote(id, midi, this._context?.currentTime, MAX_NOTE_SECONDS, velocity);
+    return this._playNote(id, midi, this._context?.currentTime, MAX_NOTE_SECONDS, velocity, true);
+  }
+
+  /** Prepare the full chord before reading its common onset. No timer or
+   * artificial scheduling delay is introduced into live key input. */
+  noteOnBatch(notes) {
+    if (!this._canPlay() || !Array.isArray(notes)) return 0;
+    const unique = new Map();
+    for (const note of notes) {
+      if (note && note.id !== undefined && finite(note.velocity, 0.75) > 0) unique.set(note.id, note);
+    }
+    // The instrument has 27 keys; bound the API too so malformed input cannot
+    // allocate an unlimited number of oscillator graphs in one gesture.
+    const entries = [...unique.values()].slice(0, 32);
+    for (const { id } of entries) this.noteOff(id);
+    const prepared = entries.map(({ id, midi, velocity = 0.75 }) => this._prepareNote(id, midi, velocity, true));
+    const time = this._context.currentTime;
+    for (const note of prepared) {
+      this._reserveVoice(time, true);
+      this._startNote(note, time, MAX_NOTE_SECONDS);
+    }
+    return prepared.length;
   }
 
   scheduleNote(id, midi, startAudioTime, durationSeconds, velocity = 0.75) {
     if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return false;
-    return this._playNote(id, midi, startAudioTime, durationSeconds, velocity);
+    return this._playNote(id, midi, startAudioTime, durationSeconds, velocity, false);
   }
 
-  _playNote(id, midi, startAudioTime, durationSeconds, velocity) {
-    if (!this._context || this._context.state !== 'running' || !this._pianoEnabled) return false;
-    if (finite(velocity, 0.75) <= 0) return false;
+  _canPlay() {
+    return this._context && this._context.state === 'running' && this._pianoEnabled;
+  }
+
+  _dropVoice(note) {
+    this._releaseNote(note, true);
+    note.envelope.disconnect();
+    this._voices.delete(note);
+  }
+
+  _reserveVoice(time, live) {
+    const now = this._context.currentTime;
+    // Finished voices can await their asynchronous onended callback. Reclaim
+    // them first, without counting them against currently held notes.
+    for (const note of this._voices) if (note.end <= now) this._dropVoice(note);
+    const overlapping = [...this._voices].filter(note => note.start <= time && note.end > time);
+    const candidates = overlapping.length >= 32 ? overlapping
+      : this._voices.size >= 256 ? [...this._voices] : [];
+    if (!candidates.length) return true;
+    // A released tail may be older OR newer than a held note. Prefer the tail
+    // explicitly, then playback voices, before considering a held live key.
+    const evict = candidates.find(note => note.released)
+      ?? candidates.find(note => !note.live)
+      ?? (live ? candidates[0] : null);
+    if (!evict) return false;
+    this._dropVoice(evict);
+    return true;
+  }
+
+  _playNote(id, midi, startAudioTime, durationSeconds, velocity, live = false) {
+    if (!this._canPlay() || finite(velocity, 0.75) <= 0) return false;
     if (this._notes.has(id)) this.noteOff(id);
     const ctx = this._context;
     const time = Math.max(ctx.currentTime, finite(startAudioTime, ctx.currentTime));
-    const duration = clamp(finite(durationSeconds, MAX_NOTE_SECONDS), 0.025, MAX_NOTE_SECONDS);
-    const end = time + duration + 0.13;
-    // Future phrase notes do not consume simultaneous polyphony. Both the
-    // pending queue and overlapping voices are bounded, including key repeats.
-    const overlapping = [...this._voices].filter(note => note.start <= time && note.end > time);
-    const evict = overlapping.length >= 32 ? overlapping[0]
-      : this._voices.size >= 256 ? this._voices.values().next().value : null;
-    if (evict) {
-      this._releaseNote(evict, true);
-      evict.envelope.disconnect();
-      this._voices.delete(evict);
-    }
+    if (!this._reserveVoice(time, live)) return false;
+    const note = this._prepareNote(id, midi, velocity, live);
+    this._startNote(note, time, durationSeconds);
+    return true;
+  }
+
+  _prepareNote(id, midi, velocity, live) {
+    const ctx = this._context;
     const frequency = 440 * 2 ** ((clamp(finite(midi, 60), 21, 108) - 69) / 12);
     const level = clamp(finite(velocity, 0.75), 0, 1) * 0.26;
     const envelope = ctx.createGain();
     envelope.gain.value = 0;
-    envelope.gain.setValueAtTime(0, time);
-    envelope.gain.linearRampToValueAtTime(level, time + PIANO_ATTACK_SECONDS);
-    for (const point of [0.3, 2.8, 8]) {
-      if (point < duration) envelope.gain.exponentialRampToValueAtTime(pianoLevel(level, point), time + point);
-    }
-    envelope.gain.exponentialRampToValueAtTime(pianoLevel(level, duration), time + duration);
-    envelope.gain.linearRampToValueAtTime(0, time + duration + 0.12);
     envelope.connect(this._master);
     const sources = [];
     const partials = [];
@@ -409,18 +447,13 @@ export class AudioEngine {
       const partial = ctx.createGain();
       source.type = type;
       source.frequency.value = frequency * ratio;
-      partial.gain.setValueAtTime(weight, time);
-      if (ratio > 1) partial.gain.exponentialRampToValueAtTime(0.005, time + 1.2 / Math.sqrt(ratio));
+      partial.gain.value = weight;
       source.connect(partial);
       partial.connect(envelope);
-      source.start(time);
-      source.stop(end);
       sources.push(source);
       partials.push(partial);
     });
-    const note = { id, sources, partials, envelope, start: time, end, duration, level, released: false };
-    this._notes.set(id, note);
-    this._voices.add(note);
+    const note = { id, sources, partials, envelope, level, live, released: false };
     sources[0].onended = () => {
       this._voices.delete(note);
       if (this._notes.get(id) === note) this._notes.delete(id);
@@ -428,7 +461,30 @@ export class AudioEngine {
       partials.forEach(partial => partial.disconnect());
       envelope.disconnect();
     };
-    return true;
+    return note;
+  }
+
+  _startNote(note, time, durationSeconds) {
+    const duration = clamp(finite(durationSeconds, MAX_NOTE_SECONDS), 0.025, MAX_NOTE_SECONDS);
+    const end = time + duration + 0.13;
+    const { envelope, level, sources, partials } = note;
+    Object.assign(note, { start: time, end, duration });
+    envelope.gain.setValueAtTime(0, time);
+    envelope.gain.linearRampToValueAtTime(level, time + PIANO_ATTACK_SECONDS);
+    for (const point of [0.3, 2.8, 8]) {
+      if (point < duration) envelope.gain.exponentialRampToValueAtTime(pianoLevel(level, point), time + point);
+    }
+    envelope.gain.exponentialRampToValueAtTime(pianoLevel(level, duration), time + duration);
+    envelope.gain.linearRampToValueAtTime(0, time + duration + 0.12);
+    [1, 2, 3.002, 4.006].forEach((ratio, index) => {
+      const partial = partials[index];
+      partial.gain.setValueAtTime(partial.gain.value, time);
+      if (ratio > 1) partial.gain.exponentialRampToValueAtTime(0.005, time + 1.2 / Math.sqrt(ratio));
+      sources[index].start(time);
+      sources[index].stop(end);
+    });
+    this._notes.set(note.id, note);
+    this._voices.add(note);
   }
 
   _releaseNote(note, immediate = false) {

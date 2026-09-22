@@ -28,6 +28,14 @@ These are physical keyboard positions. Every form also has its own touch pad, pi
 
 Category, perspective, entity and timing remain distinct. These ontology meanings are a vocabulary for constructing imagined worlds; musical intervals do not automatically establish causal relationships.
 
+### Full rows, all notes and custom chords
+
+Hold **1** for all nine archetypal notes (Q–O), **2** for all nine inner notes (A–L), **3** for all nine outer notes (Z–.), or **4** for all **27** notes together. The number pad also works. The four buttons above the piano support the same hold-and-release action with a mouse or touch; a focused button also supports holding Enter or Space. Each chord starts with one shared audio onset and records one shared onset time.
+
+Turn on **Latch individual keys** to build a custom chord one key at a time. Tap a note to keep it held, and tap again to release it. Row shortcuts and buttons remain momentary. Switching latch off releases latched notes while preserving notes you are still physically holding. **Escape** or **Release notes** releases everything. The counter shows the number of distinct held notes; overlapping row, key, pointer and latch inputs share each pitch instead of doubling it. Notes stop only when their last input releases them. Focus loss and hiding the page also clear every hold.
+
+All 27 reported key presses are supported directly. Some keyboards cannot report large simultaneous combinations because of hardware or protocol rollover; a web page cannot recover key presses it never receives. The number shortcuts, on-screen row controls and latch mode work around this restriction. They do not alter the physical keyboard's rollover capability. The first row includes **O** as its ninth key.
+
 ## Three modes
 
 - **Free play:** improvise with all 27 keys, with or without accompaniment. Record up to three minutes of key presses and held durations, replay the phrase, and export it as JSON. Recordings, world notes and settings remain in the current browser.
@@ -53,7 +61,7 @@ The global cue setting supports continuous sound, visual-only timing, and four a
 
 ## Audio and measurement
 
-Audio is locally synthesized using Web Audio. The piano has a short attack, decaying harmonics and a quiet sustain until release. A one-hour safety ceiling applies to a single held or scheduled note. Up to 32 simultaneous piano voices are supported; actual hardware key rollover may impose a lower limit on keyboard chords. Touch input has independent pointer handling.
+Audio is locally synthesized using Web Audio. The piano has a short attack, decaying harmonics and a quiet sustain until release. A one-hour safety ceiling applies to a single held or scheduled note. Up to 32 simultaneous piano voices are supported, allowing all 27 instrument keys together. When capacity is needed, released tails and scheduled voices yield before held live keys. Actual hardware key rollover may impose a lower limit on physical keyboard chords; use the full-row shortcuts or latch mode in that case. Touch input has independent pointer handling.
 
 Once audio is running, a key press starts its note synchronously, before display or recording updates. Live notes have no added scheduling delay and a 1.5 ms attack. A memoryless soft limiter bounds dense chords without a compressor's lookahead buffer. The browser is asked for interactive audio latency; its actual output buffer and device remain outside the game's control.
 

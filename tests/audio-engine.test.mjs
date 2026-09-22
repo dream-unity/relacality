@@ -451,3 +451,110 @@ test('beat callbacks and clock phases follow estimated audible time while schedu
     assert.ok(engine.context.sources.some(source => Math.abs(source.startTime - epoch - 0.5) < 1e-9), 'render scheduler still queues upcoming output in advance');
   });
 });
+
+test('one chord starts all 27 keys on the same audio timestamp after graph preparation', async () => {
+  await withEngine({}, async engine => {
+    const chord = Array.from({ length: 27 }, (_, index) => ({ id: `key-${index}`, midi: 48 + index }));
+    assert.equal(engine.noteOnBatch(chord), 0, 'batch input also requires an unlocked audio context');
+    await engine.unlock();
+    const ctx = engine.context;
+    const createOscillator = ctx.createOscillator.bind(ctx);
+    ctx.createOscillator = () => {
+      ctx.currentTime += 0.0005; // Simulate substantial graph setup across render quanta.
+      return createOscillator();
+    };
+    assert.equal(engine.noteOnBatch(chord), 27);
+    assert.equal(engine._notes.size, 27);
+    assert.equal(engine._voices.size, 27);
+    const onset = ctx.currentTime;
+    for (const note of engine._notes.values()) {
+      assert.equal(note.start, onset, 'every note uses the render time after all graph setup');
+      assert.ok(note.sources.every(source => source.startTime === onset));
+      assert.deepEqual(note.envelope.gain.calls[0], ['set', 0, onset]);
+      assert.equal(note.live, true);
+    }
+    assert.equal(new Set(ctx.sources.map(source => source.startTime)).size, 1);
+  });
+});
+
+test('all 27 physical key inputs can remain held and release independently', async () => {
+  await withEngine({}, async engine => {
+    await engine.unlock();
+    for (let index = 0; index < 27; index++) assert.equal(engine.noteOn(`key-${index}`, 48 + index), true);
+    const held = [...engine._notes.values()];
+    engine.context.advance(engine.context.currentTime + 0.1);
+    for (let index = 0; index < 9; index++) engine.noteOff(`key-${index}`);
+    assert.equal(engine._notes.size, 18);
+    assert.ok(held.slice(0, 9).every(note => note.released));
+    assert.ok(held.slice(9).every(note => !note.released && !note.envelope.disconnected));
+    engine.context.advance(engine.context.currentTime + 0.2);
+    assert.equal(engine._voices.size, 18);
+    assert.ok(held.slice(9).every(note => engine._notes.get(note.id) === note));
+  });
+});
+
+test('rapid 27-note chord releases and restrikes never lose newly held voices', async () => {
+  await withEngine({}, async engine => {
+    await engine.unlock();
+    const chord = Array.from({ length: 27 }, (_, index) => ({ id: `key-${index}`, midi: 48 + index }));
+    for (let strike = 0; strike < 20; strike++) {
+      assert.equal(engine.noteOnBatch(chord), 27);
+      assert.equal(engine._notes.size, 27);
+      assert.ok(engine._voices.size <= 32, 'tails remain bounded even before they naturally end');
+      assert.ok([...engine._notes.values()].every(note => !note.released && !note.envelope.disconnected));
+      engine.context.advance(engine.context.currentTime + 0.01);
+      for (const { id } of chord) engine.noteOff(id);
+    }
+    engine.context.advance(engine.context.currentTime + 0.2);
+    assert.equal(engine._notes.size, 0);
+    assert.equal(engine._voices.size, 0);
+  });
+});
+
+test('retriggering a row evicts newer release tails before older still-held keys', async () => {
+  await withEngine({}, async engine => {
+    await engine.unlock();
+    const chord = Array.from({ length: 27 }, (_, index) => ({ id: `key-${index}`, midi: 48 + index }));
+    engine.noteOnBatch(chord);
+    const sustained = [...engine._notes.values()].slice(0, 18);
+    for (let strike = 0; strike < 20; strike++) {
+      engine.context.advance(engine.context.currentTime + 0.01);
+      assert.equal(engine.noteOnBatch(chord.slice(18)), 9);
+      assert.equal(engine._notes.size, 27);
+      assert.ok(engine._voices.size <= 32);
+      for (const note of sustained) {
+        assert.equal(engine._notes.get(note.id), note, 'unchanged input keeps its original sustained voice');
+        assert.equal(note.released, false);
+        assert.notEqual(note.envelope.disconnected, true);
+      }
+    }
+  });
+});
+
+test('scheduled playback cannot evict held live keys when its overlapping voice budget is full', async () => {
+  await withEngine({}, async engine => {
+    await engine.unlock();
+    for (let index = 0; index < 32; index++) engine.noteOn(`held-${index}`, 48 + index);
+    const held = [...engine._notes.values()];
+    assert.equal(engine.scheduleNote('extra-playback', 60, engine.context.currentTime + 0.02, 0.5), false);
+    assert.equal(engine._notes.size, 32);
+    assert.ok(held.every(note => engine._notes.get(note.id) === note && !note.released));
+    engine.noteOff('held-31');
+    engine.context.advance(engine.context.currentTime + 0.2);
+    assert.equal(engine.scheduleNote('extra-playback', 60, engine.context.currentTime + 0.02, 0.5), true);
+    assert.ok(held.slice(0, 31).every(note => engine._notes.get(note.id) === note && !note.released));
+  });
+});
+
+test('batch input deduplicates IDs, ignores silent entries, and respects piano muting', async () => {
+  await withEngine({}, async engine => {
+    await engine.unlock();
+    assert.equal(engine.noteOnBatch(null), 0);
+    assert.equal(engine.noteOnBatch([null, {}, { id: 'silent', midi: 60, velocity: 0 }, { id: 'a', midi: 60 }, { id: 'a', midi: 64 }]), 1);
+    assert.equal(engine._notes.size, 1);
+    assert.ok(Math.abs(engine._notes.get('a').sources[0].frequency.value - 440 * 2 ** ((64 - 69) / 12)) < 1e-8);
+    engine.setPianoEnabled(false);
+    assert.equal(engine.noteOnBatch([{ id: 'b', midi: 62 }]), 0);
+    assert.equal(engine._notes.size, 0);
+  });
+});

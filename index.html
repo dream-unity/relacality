@@ -30,6 +30,17 @@
 
       <section id="instrument" class="instrument" aria-labelledby="piano-title">
         <div class="instrument-top"><div><p class="eyebrow">27 OPERATIONS / 27 KEYS</p><h2 id="piano-title">Your instrument</h2></div><div class="instrument-options"><label class="switch-label"><input id="piano-sound" type="checkbox" checked><span>Key sound</span></label><label class="volume-label" for="master-volume">Volume<input id="master-volume" type="range" min="0" max="100" value="65" aria-label="Master volume"></label><button id="release-notes" class="quiet-button" type="button" title="Release all held notes (Escape)">Release notes <kbd>Esc</kbd></button></div></div>
+        <div class="chord-panel" aria-label="Full-row and all-note chords">
+          <div class="chord-heading"><span>Hold a whole row</span><output id="held-count" aria-label="Held notes">0 / 27 held</output></div>
+          <div class="chord-buttons">
+            <button type="button" class="chord-button" data-chord="archetypal" aria-pressed="false" aria-keyshortcuts="1"><kbd>1</kbd><span>Archetypal <small>Q–O · 9 notes</small></span></button>
+            <button type="button" class="chord-button" data-chord="inner" aria-pressed="false" aria-keyshortcuts="2"><kbd>2</kbd><span>Inner <small>A–L · 9 notes</small></span></button>
+            <button type="button" class="chord-button" data-chord="outer" aria-pressed="false" aria-keyshortcuts="3"><kbd>3</kbd><span>Outer <small>Z–. · 9 notes</small></span></button>
+            <button type="button" class="chord-button" data-chord="all" aria-pressed="false" aria-keyshortcuts="4"><kbd>4</kbd><span>All 27 <small>Every category</small></span></button>
+          </div>
+          <p class="chord-help">Hold a button or its number key to play the chord; release to stop. These shortcuts work even when your keyboard cannot report many keys together.</p>
+          <div class="latch-controls"><button type="button" id="latch-keys" class="button secondary" aria-pressed="false" aria-describedby="latch-help">Latch individual keys</button><span id="latch-help">Latch lets you build a chord one key at a time. Escape releases every note.</span></div>
+        </div>
         <div id="piano-keys" class="piano-keys"></div>
         <div class="key-inspector"><div class="inspector-mark" aria-hidden="true">♪</div><div><strong id="active-key-name">Choose a key. Imagine an operation.</strong><p id="active-key-description">Use your keyboard or touch the keys. Each form has its own key and pitch. Hold to sustain; release to let go.</p></div><span id="audio-state" class="status-chip">Sound starts with your first key</span></div>
         <p class="small-note" title="The browser's estimate may omit keyboard, Bluetooth or other device delay. Visual pulses follow estimated audible time; this cannot remove hardware delay."><span id="audio-latency">Output delay appears after sound starts.</span> For tighter timing, use built-in speakers or wired headphones.</p>
