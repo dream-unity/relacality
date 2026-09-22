@@ -9,13 +9,38 @@ const finite = (value, fallback) => Number.isFinite(Number(value)) ? Number(valu
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const whole = (value, fallback, min, max) => clamp(Math.round(finite(value, fallback)), min, max);
 const MAX_NOTE_SECONDS = 3600;
+const PIANO_ATTACK_SECONDS = 0.0015;
+
+// WaveShaper inputs are nominally [-1, 1]. Reserve room for a summed signal
+// eight times that size, preserving ordinary levels before a gentle, bounded
+// knee. No look-ahead or oversampling is used in the live instrument path.
+function limiterCurve() {
+  return Float32Array.from({ length: 4097 }, (_, index) => {
+    const signal = (index / 2048 - 1) * 8;
+    const magnitude = Math.abs(signal);
+    return Math.sign(signal) * (magnitude <= 0.75 ? magnitude : 0.75 + 0.22 * Math.tanh((magnitude - 0.75) / 0.22));
+  });
+}
+
+function estimatedDeviceDelay(context) {
+  let total = 0;
+  let available = false;
+  for (const key of ['baseLatency', 'outputLatency']) {
+    const value = context?.[key];
+    if (Number.isFinite(value) && value >= 0 && value <= 10) {
+      total += value;
+      available = true;
+    }
+  }
+  return available ? total : null;
+}
 
 // A piano-like attack loses its bright partials, while a quiet fundamental
 // remains audible for duration-based tasks, including very slow beat cycles.
 function pianoLevel(level, age) {
   if (age <= 0) return 0;
-  if (age < 0.006) return level * age / 0.006;
-  if (age <= 0.3) return level * 0.46 ** ((age - 0.006) / 0.294);
+  if (age < PIANO_ATTACK_SECONDS) return level * age / PIANO_ATTACK_SECONDS;
+  if (age <= 0.3) return level * 0.46 ** ((age - PIANO_ATTACK_SECONDS) / (0.3 - PIANO_ATTACK_SECONDS));
   if (age <= 2.8) return level * 0.46 * (0.2 / 0.46) ** ((age - 0.3) / 2.5);
   if (age <= 8) return level * 0.2 * (0.12 / 0.2) ** ((age - 2.8) / 5.2);
   return level * 0.12;
@@ -94,6 +119,51 @@ export class AudioEngine {
       : this._offset;
   }
 
+  /** Estimated device presentation time, distinct from the ahead-of-output render clock. */
+  get presentationTime() { return this._presentationSample().time; }
+
+  _presentationSample() {
+    const ctx = this._context;
+    if (!ctx) return { time: 0, delay: null };
+    const now = Math.max(0, finite(ctx.currentTime, 0));
+    const delay = estimatedDeviceDelay(ctx);
+    const fallback = { time: Math.max(0, now - (delay ?? 0)), delay: delay === null ? null : Math.min(now, delay) };
+    if (ctx.state !== 'running' || typeof ctx.getOutputTimestamp !== 'function') return fallback;
+    try {
+      const stamp = ctx.getOutputTimestamp();
+      const performanceNow = globalThis.performance?.now();
+      const age = performanceNow - stamp?.performanceTime;
+      // Browsers return zero timestamps before their first rendered block.
+      // Reject stale, future or inconsistent reports instead of moving visuals
+      // onto a timeline that cannot correspond to the current output stream.
+      if (!Number.isFinite(stamp?.contextTime) || stamp.contextTime <= 0 || stamp.contextTime > now
+        || !Number.isFinite(stamp?.performanceTime) || stamp.performanceTime <= 0
+        || !Number.isFinite(age) || age < 0 || age > 1000) return fallback;
+      const presented = stamp.contextTime + age / 1000;
+      if (presented > now + 0.05) return fallback;
+      const time = clamp(presented, 0, now);
+      return { time, delay: now - time };
+    } catch { return fallback; }
+  }
+
+  get presentationElapsed() {
+    return this._running && this._context
+      ? Math.max(this._offset, this.presentationTime - this._epoch)
+      : this._offset;
+  }
+
+  /** Browser-reported estimate, not an end-to-end keyboard latency measurement.
+   * Timestamp/render-clock differences are useful for presentation alignment,
+   * but are not a reliable latency measurement. A baseLatency alone omits the
+   * device output stage, so do not present it as the complete output estimate.
+   */
+  get outputDelay() {
+    const output = this._context?.outputLatency;
+    return Number.isFinite(output) && output >= 0 && output <= 10
+      ? estimatedDeviceDelay(this._context)
+      : null;
+  }
+
   async unlock() {
     if (!this._context) {
       const Context = globalThis.AudioContext || globalThis.webkitAudioContext;
@@ -101,15 +171,16 @@ export class AudioEngine {
       this._context = new Context({ latencyHint: 'interactive' });
       this._master = this._context.createGain();
       this._master.gain.value = this._masterVolume;
-      // A compressor limits dense chords and six simultaneous click accents.
-      this._compressor = this._context.createDynamicsCompressor();
-      this._compressor.threshold.value = -12;
-      this._compressor.knee.value = 12;
-      this._compressor.ratio.value = 5;
-      this._compressor.attack.value = 0.003;
-      this._compressor.release.value = 0.15;
-      this._master.connect(this._compressor);
-      this._compressor.connect(this._context.destination);
+      // A memoryless limiter protects dense chords without a compressor's
+      // look-ahead delay. Piano and clicks share this same output path.
+      this._headroom = this._context.createGain();
+      this._headroom.gain.value = 1 / 8;
+      this._limiter = this._context.createWaveShaper();
+      this._limiter.curve = limiterCurve();
+      this._limiter.oversample = 'none';
+      this._master.connect(this._headroom);
+      this._headroom.connect(this._limiter);
+      this._limiter.connect(this._context.destination);
       this._stateChange = () => {
         if (this._running && ['suspended', 'interrupted', 'closed'].includes(this._context.state)) {
           this.pause('audio-suspended');
@@ -203,7 +274,7 @@ export class AudioEngine {
   getClockPhase(index) {
     const clock = this.clocks[index];
     if (!clock) return { beatIndex: -1, fraction: 0 };
-    const position = this.elapsed / beatDuration(clock.bpm) - clock.phase;
+    const position = this.presentationElapsed / beatDuration(clock.bpm) - clock.phase;
     if (position < 0) return { beatIndex: -1, fraction: 0 };
     return { beatIndex: Math.floor(position) % clock.beats, fraction: position - Math.floor(position) };
   }
@@ -219,13 +290,14 @@ export class AudioEngine {
   _tick() {
     if (!this._running || this._context.state !== 'running') return;
     const now = this._context.currentTime;
+    const presentationNow = this.presentationTime;
     const horizon = now + this._lookahead;
     // Flush only events that have reached their audio time. Old events after a
     // background stall are discarded, so the visualizer never catches up in a burst.
     const future = [];
     for (const event of this._events) {
-      if (event.time > now) future.push(event);
-      else if (now - event.time < 0.15) this.onBeat(event);
+      if (event.time > presentationNow) future.push(event);
+      else if (presentationNow - event.time < 0.15) this.onBeat(event);
     }
     this._events = future;
     this.clocks.forEach((clock, clockIndex) => {
@@ -292,7 +364,7 @@ export class AudioEngine {
   }
 
   noteOn(id, midi, velocity = 0.75) {
-    return this._playNote(id, midi, this._context?.currentTime + 0.002, MAX_NOTE_SECONDS, velocity);
+    return this._playNote(id, midi, this._context?.currentTime, MAX_NOTE_SECONDS, velocity);
   }
 
   scheduleNote(id, midi, startAudioTime, durationSeconds, velocity = 0.75) {
@@ -305,7 +377,7 @@ export class AudioEngine {
     if (finite(velocity, 0.75) <= 0) return false;
     if (this._notes.has(id)) this.noteOff(id);
     const ctx = this._context;
-    const time = Math.max(ctx.currentTime + 0.002, finite(startAudioTime, ctx.currentTime + 0.002));
+    const time = Math.max(ctx.currentTime, finite(startAudioTime, ctx.currentTime));
     const duration = clamp(finite(durationSeconds, MAX_NOTE_SECONDS), 0.025, MAX_NOTE_SECONDS);
     const end = time + duration + 0.13;
     // Future phrase notes do not consume simultaneous polyphony. Both the
@@ -323,7 +395,7 @@ export class AudioEngine {
     const envelope = ctx.createGain();
     envelope.gain.value = 0;
     envelope.gain.setValueAtTime(0, time);
-    envelope.gain.linearRampToValueAtTime(level, time + 0.006);
+    envelope.gain.linearRampToValueAtTime(level, time + PIANO_ATTACK_SECONDS);
     for (const point of [0.3, 2.8, 8]) {
       if (point < duration) envelope.gain.exponentialRampToValueAtTime(pianoLevel(level, point), time + point);
     }
@@ -396,7 +468,8 @@ export class AudioEngine {
     this.stop();
     this._context?.removeEventListener?.('statechange', this._stateChange);
     this._master?.disconnect();
-    this._compressor?.disconnect();
+    this._headroom?.disconnect();
+    this._limiter?.disconnect();
     this._context?.close();
   }
 }

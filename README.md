@@ -55,9 +55,13 @@ The global cue setting supports continuous sound, visual-only timing, and four a
 
 Audio is locally synthesized using Web Audio. The piano has a short attack, decaying harmonics and a quiet sustain until release. A one-hour safety ceiling applies to a single held or scheduled note. Up to 32 simultaneous piano voices are supported; actual hardware key rollover may impose a lower limit on keyboard chords. Touch input has independent pointer handling.
 
+Once audio is running, a key press starts its note synchronously, before display or recording updates. Live notes have no added scheduling delay and a 1.5 ms attack. A memoryless soft limiter bounds dense chords without a compressor's lookahead buffer. The browser is asked for interactive audio latency; its actual output buffer and device remain outside the game's control.
+
 Metronomes are scheduled against `AudioContext.currentTime` with lookahead. Event times are calculated from an epoch instead of accumulating timer intervals. Late background beats are skipped rather than emitted as a burst. Recording replay uses a rolling scheduling window. Pause, stop and cancellation release queued audio.
 
-Timing feedback uses the device's input and audio clocks. It is useful practice feedback, not calibrated laboratory measurement; wireless output may introduce latency. The standard onset/hold tolerance is ±0.25 beats. Incorrect, missing and additional notes affect the scores. No audio is recorded from a microphone.
+Metronome visuals, replay highlights and practice timing follow estimated audible time using `getOutputTimestamp()` when valid, with reported `baseLatency` / `outputLatency` as a fallback. Audio scheduling itself stays on the render clock. The interface reports the browser's available output-delay estimate; that estimate may omit input, Bluetooth and other hardware delays. It is not an end-to-end latency measurement. Built-in speakers or wired headphones are preferable when wireless audio feels late. Software cannot make a newly pressed note reach a slow output device instantly, and notes are never quantized to hide a mistimed press.
+
+Timing feedback describes key input against the estimated audible beat. It is useful practice feedback, not calibrated laboratory measurement. The standard onset/hold tolerance is ±0.25 beats. Incorrect, missing and additional notes affect the scores. No audio is recorded from a microphone.
 
 ## Checks
 

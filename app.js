@@ -80,18 +80,23 @@ function noteName(midi) { const pitches=['C','C♯','D','D♯','E','F','F♯','G
 function inspectKey(key) { $('#active-key-name').textContent = key.name; $('#active-key-description').textContent = key.description; }
 function paintHeld(keyId, state) { const button=$(`[data-key-id="${keyId}"]`); if(button) { button.classList.toggle('is-held',state); button.setAttribute('aria-pressed',String(state)); } }
 function isTyping(target) { return target instanceof Element && (target.matches('input, textarea, select') || target.isContentEditable); }
-async function pressKey(key, source) {
+function pressKey(key, source) {
   if (held.has(source)) return;
   const token = generation;
   const entry = { key, began: performance.now(), noteId:`input-${source}`, record:null, performance:null, cancelled:false };
-  held.set(source,entry); paintHeld(key.id,true); inspectKey(key);
-  if (recordStart !== null) { entry.record={keyId:key.id,onset:(entry.began-recordStart)/1000,duration:.15}; recording.push(entry.record); renderPhrase(); }
+  held.set(source,entry);
+  // A running instrument must respond in this input event, before DOM updates
+  // or a Promise continuation. Only a cold/suspended context needs unlocking.
+  if (engine.context?.state === 'running') engine.noteOn(entry.noteId,key.midi,.75);
+  else void readyAudio().then(ready => {
+    if (ready && token===generation && !entry.cancelled && held.get(source)===entry) engine.noteOn(entry.noteId,key.midi,.75);
+  });
   if (practice && practice.type === 'perform') {
-    const onset=(engine.elapsed-practice.startElapsed)/practice.beatSeconds;
+    const onset=(engine.presentationElapsed-practice.startElapsed)/practice.beatSeconds;
     if (onset >= -.45 && onset <= challenge.lengthBeats+.5) { entry.performance={keyId:key.id,onset,duration:0}; practice.events.push(entry.performance); }
   }
-  if (!await readyAudio() || token!==generation || entry.cancelled || held.get(source)!==entry) return;
-  engine.noteOn(entry.noteId,key.midi,.75);
+  paintHeld(key.id,true); inspectKey(key);
+  if (recordStart !== null) { entry.record={keyId:key.id,onset:(entry.began-recordStart)/1000,duration:.15}; recording.push(entry.record); renderPhrase(); }
 }
 function releaseKey(source) {
   const entry=held.get(source); if(!entry)return;
@@ -294,19 +299,29 @@ function finishPerformance() {
   $('#performance-results').innerHTML=`<div><strong>${Math.round(result.identityAccuracy)}%</strong><span>Correct notes</span></div><div><strong>${Math.round(result.timingAccuracy)}%</strong><span>On time · ±¼ beat</span></div><div><strong>${result.meanAbsErrorBeats===null?'—':number(result.meanAbsErrorBeats)}</strong><span>Mean error · beats</span></div>${result.durationAccuracy!==null&&result.durationAccuracy!==undefined?`<div><strong>${Math.round(result.durationAccuracy)}%</strong><span>Required holds</span></div>`:''}`;
 }
 let lastSecond=-1;
+let lastLatencyRefresh=-Infinity;
+function setText(element, value) { if(element.textContent!==value)element.textContent=value; }
 function frame() {
-  const elapsed=engine.elapsed||0;
-  $('#transport-toggle').innerHTML=engine.running?'<span aria-hidden="true">Ⅱ</span> Pause clocks':'<span aria-hidden="true">▶</span> '+(elapsed>0?'Resume clocks':'Start clocks');
+  const elapsed=engine.presentationElapsed||0;
+  const transportLabel=engine.running?'Ⅱ Pause clocks':'▶ '+(elapsed>0?'Resume clocks':'Start clocks');
+  const transport=$('#transport-toggle');
+  if(transport.textContent!==transportLabel)transport.innerHTML=engine.running?'<span aria-hidden="true">Ⅱ</span> Pause clocks':'<span aria-hidden="true">▶</span> '+(elapsed>0?'Resume clocks':'Start clocks');
   $('#transport-stop').disabled=!engine.running && elapsed===0;
   if(Math.floor(elapsed)!==lastSecond){$('#transport-time').textContent=formatTime(elapsed);lastSecond=Math.floor(elapsed);}
-  $('#transport-status').textContent=engine.running?($('#cue-mode').value==='silent'?'Running · visual cues':'Running'):elapsed>0?'Paused':'Ready';
+  setText($('#transport-status'),engine.running?($('#cue-mode').value==='silent'?'Running · visual cues':'Running'):elapsed>0?'Paused':'Ready');
+  const frameTime=performance.now();
+  if(engine.context?.state==='running' && frameTime-lastLatencyRefresh>1000) {
+    lastLatencyRefresh=frameTime;
+    const delay=engine.outputDelay;
+    setText($('#audio-latency'),delay===null?'Output delay unavailable from this browser.':`Estimated audio output delay: ${Math.round(delay*1000)} ms.`);
+  }
   $$('.clock-card').forEach((card,index)=>{
     const phase=engine.getClockPhase(index);const active=engine.running && clocks[index].enabled;
-    card.classList.toggle('is-ticking',active && performance.now()-(lastBeat.get(index)??-1000)<110);
+    card.classList.toggle('is-ticking',active && frameTime-(lastBeat.get(index)??-1000)<110);
     card.querySelector('.clock-progress span').style.transform=`scaleX(${active && phase.beatIndex>=0?phase.fraction:0})`;
     let text=clocks[index].enabled?(engine.running?`Beat ${phase.beatIndex+1} / ${clocks[index].beats}`:elapsed?'Paused':'Ready'):'Off';
     if(active && phase.beatIndex<0)text='Waiting';
-    card.querySelector('.clock-state').textContent=text;
+    setText(card.querySelector('.clock-state'),text);
   });
   if(practice) {
     const beats=(elapsed-practice.startElapsed)/practice.beatSeconds;
@@ -316,10 +331,10 @@ function frame() {
   }
   if(playback && engine.context) {
     schedulePlayback();
-    const t=(engine.context.currentTime-playback.start)/(60/playback.bpm);
+    const t=(engine.presentationTime-playback.start)/(60/playback.bpm);
     const sounding=new Set(playback.events.filter(event=>t>=event.onset&&t<event.onset+event.duration).map(event=>event.keyId));
     KEYS.forEach(key=>paintHeld(key.id,sounding.has(key.id)||[...held.values()].some(entry=>entry.key.id===key.id)));
-    if(engine.context.currentTime>playback.end+.15){playback=null;$('#replay-button').textContent='▶ Replay';}
+    if(engine.presentationTime>playback.end+.15){playback=null;$('#replay-button').textContent='▶ Replay';}
   }
   requestAnimationFrame(frame);
 }

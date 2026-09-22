@@ -12,15 +12,17 @@ class FakeParam {
   cancelAndHoldAtTime(...args) { this.calls.push(['hold', ...args]); return this; }
 }
 class FakeNode {
-  connect() { return this; }
+  connect(target) { (this.connections ??= []).push(target); return this; }
   disconnect() { this.disconnected = true; }
 }
 class FakeContext {
   constructor() { this.currentTime = 10; this.state = 'running'; this.destination = new FakeNode(); this.sources = []; }
   createGain() { return Object.assign(new FakeNode(), { gain: new FakeParam(1) }); }
   createDynamicsCompressor() {
+    this.compressorCreated = true;
     return Object.assign(new FakeNode(), Object.fromEntries(['threshold','knee','ratio','attack','release'].map(key => [key, new FakeParam()])));
   }
+  createWaveShaper() { return Object.assign(new FakeNode(), { curve: null, oversample: 'none' }); }
   createOscillator() {
     const node = Object.assign(new FakeNode(), {
       frequency: new FakeParam(440), start(time) { this.startTime = time; }, stop(time = 0) { this.stopTime = time; },
@@ -318,5 +320,134 @@ test('a future note cancelled immediately before its start cannot produce a rele
     const lastSet = note.envelope.gain.calls.filter(call => call[0] === 'set').at(-1);
     assert.deepEqual(lastSet, ['set', 0, now]);
     assert.equal(note.releaseLevel, 0);
+  });
+});
+
+test('live keys start at the current render time with the same short attack as metronome clicks', async () => {
+  await withEngine({}, async engine => {
+    await engine.unlock();
+    const now = engine.context.currentTime;
+    engine.noteOn('live', 60);
+    const note = engine._notes.get('live');
+    assert.equal(note.start, now, 'no added scheduling pad for a live key');
+    assert.ok(note.sources.every(source => source.startTime === now));
+    const attack = note.envelope.gain.calls.find(call => call[0] === 'linear');
+    assert.deepEqual(attack, ['linear', note.level, now + 0.0015]);
+    engine.context.advance(now + 0.00075);
+    engine.noteOff('live');
+    assert.ok(Math.abs(note.releaseLevel - note.level / 2) < 1e-9, 'early release follows the shortened envelope');
+  });
+});
+
+test('the shared piano and click output uses a bounded memoryless limiter without compressor look-ahead', async () => {
+  await withEngine({}, async engine => {
+    await engine.unlock();
+    assert.equal(engine.context.compressorCreated, undefined);
+    assert.equal(engine._limiter.oversample, 'none');
+    assert.deepEqual(engine._master.connections, [engine._headroom]);
+    assert.deepEqual(engine._headroom.connections, [engine._limiter]);
+    assert.deepEqual(engine._limiter.connections, [engine.context.destination]);
+    assert.equal(engine._headroom.gain.value, 1 / 8);
+    const curve = engine._limiter.curve;
+    assert.ok(curve instanceof Float32Array);
+    assert.equal(curve[2048], 0, 'silence remains silence');
+    for (let i = 0; i < curve.length; i++) {
+      const signal = (i / 2048 - 1) * 8;
+      assert.ok(Number.isFinite(curve[i]) && Math.abs(curve[i]) < 0.971, 'all possible output values remain below full scale');
+      if (i) assert.ok(curve[i] >= curve[i - 1], 'the knee is monotonic');
+      if (Math.abs(signal) <= 0.75) assert.ok(Math.abs(curve[i] - signal) < 1e-7, 'ordinary signal levels retain their gain');
+    }
+    engine.noteOn('live', 60);
+    assert.deepEqual(engine._notes.get('live').envelope.connections, [engine._master]);
+    engine._click(engine.clocks[0], engine.context.currentTime, 1);
+    assert.ok([...engine._clicks].every(click => click.gain.connections[0] === engine._master));
+  });
+});
+
+test('presentation time extrapolates valid output timestamps and rejects invalid reports safely', async () => {
+  const originalPerformance = globalThis.performance;
+  globalThis.performance = { now: () => 2000 };
+  try {
+    await withEngine({}, async engine => {
+      await engine.unlock();
+      const ctx = engine.context;
+      ctx.baseLatency = 0.01;
+      ctx.outputLatency = 0.04;
+      ctx.getOutputTimestamp = () => ({ contextTime: 9.88, performanceTime: 1980 });
+      assert.ok(Math.abs(engine.presentationTime - 9.9) < 1e-9);
+      assert.ok(Math.abs(engine.outputDelay - 0.05) < 1e-9, 'the displayed delay comes from latency APIs, not the render/output timestamp difference');
+      delete ctx.outputLatency;
+      assert.ok(Math.abs(engine.presentationTime - 9.9) < 1e-9, 'timestamp alignment remains available without a latency API');
+      assert.equal(engine.outputDelay, null, 'baseLatency alone does not estimate the complete output stage');
+      ctx.outputLatency = 0.04;
+      for (const stamp of [
+        { contextTime: 0, performanceTime: 0 },
+        { contextTime: NaN, performanceTime: 1980 },
+        { contextTime: 9.9, performanceTime: Infinity },
+        { contextTime: -1, performanceTime: 1980 },
+        { contextTime: 9.9, performanceTime: 2001 },
+        { contextTime: 8, performanceTime: 999 },
+        { contextTime: 11, performanceTime: 1980 },
+        { contextTime: 9.5, performanceTime: 1000 },
+      ]) {
+        ctx.getOutputTimestamp = () => stamp;
+        assert.ok(Math.abs(engine.presentationTime - 9.95) < 1e-9, JSON.stringify(stamp));
+        assert.ok(Math.abs(engine.outputDelay - 0.05) < 1e-9);
+      }
+      ctx.getOutputTimestamp = () => { throw new Error('unavailable'); };
+      assert.equal(engine.presentationTime, 9.95);
+      ctx.currentTime = 0.02;
+      assert.equal(engine.presentationTime, 0, 'startup presentation time never becomes negative');
+      assert.equal(engine.outputDelay, 0.05, 'the device estimate is independent of the age of the context');
+    });
+  } finally { globalThis.performance = originalPerformance; }
+});
+
+test('unavailable delay measurements remain unknown and invalid latency values cannot corrupt the timeline', async () => {
+  await withEngine({}, async engine => {
+    assert.equal(engine.outputDelay, null);
+    assert.equal(engine.presentationTime, 0);
+    await engine.unlock();
+    assert.equal(engine.outputDelay, null);
+    assert.equal(engine.presentationTime, engine.context.currentTime);
+    for (const value of [-1, NaN, Infinity, '0.1', 999]) {
+      engine.context.baseLatency = value;
+      engine.context.outputLatency = value;
+      assert.equal(engine.outputDelay, null);
+      assert.equal(engine.presentationTime, engine.context.currentTime);
+    }
+    engine.context.baseLatency = 0;
+    assert.equal(engine.outputDelay, null, 'base latency alone is not a complete output estimate');
+    engine.context.outputLatency = 0;
+    assert.equal(engine.outputDelay, 0, 'a genuine reported zero is different from an unavailable estimate');
+    engine.context.outputLatency = 0.08;
+    assert.equal(engine.presentationTime, 9.92);
+  });
+});
+
+test('beat callbacks and clock phases follow estimated audible time while scheduling stays ahead on render time', async () => {
+  const events = [];
+  await withEngine({ onBeat: event => events.push(event) }, async engine => {
+    await engine.unlock();
+    engine.context.baseLatency = 0.01;
+    engine.context.outputLatency = 0.09;
+    engine.setClocks([{ enabled: true, bpm: 240, beats: 4 }]);
+    await engine.start();
+    const epoch = engine._epoch;
+    engine.context.advance(epoch + 0.01);
+    engine._tick();
+    assert.equal(events.length, 0, 'a rendered beat is not highlighted before it is estimated to reach output');
+    engine.context.advance(epoch + 0.11);
+    engine._tick();
+    assert.equal(events.length, 1);
+    assert.equal(events[0].beatIndex, 0);
+    engine.context.advance(epoch + 0.4);
+    engine._tick();
+    engine.context.advance(epoch + 0.51);
+    engine._tick();
+    assert.ok(Math.abs(engine.elapsed - 0.51) < 1e-9);
+    assert.ok(Math.abs(engine.presentationElapsed - 0.41) < 1e-9);
+    assert.equal(engine.getClockPhase(0).beatIndex, 1);
+    assert.ok(engine.context.sources.some(source => Math.abs(source.startTime - epoch - 0.5) < 1e-9), 'render scheduler still queues upcoming output in advance');
   });
 });

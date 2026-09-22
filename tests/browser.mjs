@@ -45,7 +45,7 @@ await page.addInitScript(() => {
   for (const Type of [window.OscillatorNode, window.AudioBufferSourceNode]) {
     const start = Type.prototype.start;
     Type.prototype.start = function (...args) {
-      window.__audioProbe.starts.push({ kind: this.constructor.name, type: this.type, frequency: this.frequency?.value, at: args[0] ?? this.context.currentTime });
+      window.__audioProbe.starts.push({ kind: this.constructor.name, type: this.type, frequency: this.frequency?.value, at: args[0] ?? this.context.currentTime, lead: (args[0] ?? this.context.currentTime) - this.context.currentTime });
       return start.apply(this, args);
     };
   }
@@ -92,6 +92,18 @@ try {
   const peak = await page.evaluate(() => { const a = window.__audioProbe.analyser; if (!a) return 0; const data = new Float32Array(a.fftSize); a.getFloatTimeDomainData(data); return Math.max(...data.map(Math.abs)); });
   await page.keyboard.up('KeyA'); assert.ok(peak > .00001, `Piano peak ${peak}`);
   pass('Real Web Audio piano output contains a nonzero waveform');
+  const immediate = await page.evaluate(() => {
+    const before = window.__audioProbe.starts.length;
+    document.dispatchEvent(new KeyboardEvent('keydown', {code:'KeyD', bubbles:true}));
+    const starts = window.__audioProbe.starts.slice(before);
+    document.dispatchEvent(new KeyboardEvent('keyup', {code:'KeyD', bubbles:true}));
+    return starts;
+  });
+  assert.equal(immediate.length, 4, 'Live oscillators start before the input handler returns, without awaiting a Promise');
+  assert.ok(immediate.every(start => start.lead <= .0001), 'Live notes have no added scheduling delay');
+  pass('A warm key press starts audio synchronously with no artificial scheduling lead');
+  await page.waitForFunction(() => /Estimated audio output delay:|Output delay unavailable/.test(document.querySelector('#audio-latency').textContent));
+  pass('Audio output delay is reported as an estimate or explicitly unavailable');
   assert.equal(await page.locator('.clock-card').count(), 6); pass('Six independent metronome controls render');
   for (let i = 1; i <= 6; i++) {
     await fillNumber(`Clock ${i} BPM`, 1); assert.equal(await page.getByLabel(`Clock ${i} BPM`, { exact: true }).inputValue(), '1');
